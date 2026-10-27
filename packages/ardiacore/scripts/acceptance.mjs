@@ -4379,6 +4379,7 @@ try {
       writeFileSync(join(dir, "options.js"), `globalThis.__acLocalePage = ${snapshot};
         document.querySelector("output").textContent = globalThis.__acLocalePage.message;`);
       let installed;
+      let cleanupError;
       try {
         const inspected = await exts(`inspectUnpacked(${JSON.stringify(dir)})`);
         if (inspected?.name !== name) throw new Error(`${variant} inspected manifest: ${JSON.stringify(inspected)}, expected ${name}`);
@@ -4417,12 +4418,18 @@ try {
           try {
             const owned = await evalApp(`return Object.values(ac.store.getState().tabs).filter((t) => t.url?.startsWith(${JSON.stringify(`chrome-extension://${installed.id}/`)})).map((t) => t.id)`);
             for (const id of owned) await closeTab(id);
-          } finally {
+          } catch (error) {
+            cleanupError = error;
+          }
+          try {
             const removed = await exts(`uninstall(${JSON.stringify(installed.id)}, "")`);
             if (removed?.error) throw new Error(`${variant} uninstall: ${removed.error}`);
+          } catch (error) {
+            cleanupError ??= error;
           }
         }
       }
+      if (cleanupError) throw cleanupError;
     };
     try {
       if (before.profileId !== "default") {
